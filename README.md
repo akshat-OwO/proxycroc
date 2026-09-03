@@ -1,15 +1,126 @@
-# pullcroc
+<img src="web/public/logo-light.png#gh-light-mode-only" alt="proxycroc" width="120">
+<img src="web/public/logo-dark.png#gh-dark-mode-only" alt="proxycroc" width="120">
 
-To install dependencies:
+# proxycroc
 
-```bash
+A proxy bot for agents. Give an agent an API key and it can read your issues
+and pull requests, comment on them, open and close issues, and review code.
+It never holds your GitHub credentials, and everything it writes appears as
+the bot rather than as you.
+
+The key carries its own limits. Scope it to one repository and it can reach
+nothing else. Uncheck a capability and the API refuses that whole class of
+call, so a key meant for triage cannot approve a merge.
+
+Live at [proxycroc.4kshat.dev](https://proxycroc.4kshat.dev). Agents can read
+the manual at [/llm.txt](https://proxycroc.4kshat.dev/llm.txt).
+
+## Using it
+
+Install the GitHub App from the console, create a key, and hand it to your
+agent.
+
+```sh
+curl https://proxycroc.4kshat.dev/api/review \
+  -H "Authorization: Bearer $PROXYCROC_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "repository": "owner/name",
+    "pull_request": 42,
+    "event": "REQUEST_CHANGES",
+    "body": "Two things before this merges.",
+    "comments": [
+      {
+        "path": "src/worker.ts",
+        "line": 128,
+        "body": "This parses the header twice.",
+        "suggestion": "const key = header.slice(7).trim();"
+      }
+    ]
+  }'
+```
+
+| Method | Path | What it does |
+| --- | --- | --- |
+| GET | /api/issues | Open issues. Add `?state=closed` or `all`. |
+| GET | /api/pulls | Pull requests, same state filter. |
+| POST | /api/comment | Comment on an issue or a pull request. |
+| POST | /api/issue | Open an issue, or edit one by sending its number. |
+| POST | /api/review | Review a pull request, with line comments and a verdict. |
+
+`src/docs.ts` is the full manual and the only copy of it. `/llm.txt` serves it
+as plain text and `/docs` renders it, so the two cannot drift.
+
+## How it runs
+
+Two Cloudflare Workers and one D1 database, all defined in `alchemy.run.ts`.
+
+`proxycroc-web` is a TanStack Start app. Its entry (`web/worker.ts`) forwards
+everything under `/api` to the API worker over a service binding and hands
+the rest to SSR. One origin, so the session cookie stays first-party and
+Better Auth's origin check passes.
+
+`proxycroc-worker` owns the session, the database, and the agent routes. It
+signs a JWT with the GitHub App key, trades it for an installation token, and
+acts through that.
+
+Drizzle owns the whole schema, auth tables included. Those are generated from
+the installed better-auth rather than from `@better-auth/cli`, because the
+published CLI lags the runtime and silently omits newer columns. Run
+`bun run auth:generate` after changing `src/auth-options.ts`.
+
+## Development
+
+```sh
 bun install
+cp .env.example .env   # fill in the four values
+bun run dev            # localhost:1337
+bun run deploy         # prod stage, reads .env.prod
 ```
 
-To run:
+You need two GitHub apps and one OAuth app:
 
-```bash
-bun run index.ts
+- An **OAuth App** signs users in. `GITHUB_CLIENT_ID` and
+  `GITHUB_CLIENT_SECRET`, callback `/api/auth/callback/github`.
+- A **GitHub App** comments as the bot. `GITHUB_APP_ID`, `GITHUB_APP_SLUG`,
+  and `GITHUB_APP_PRIVATE_KEY` as the base64 of the downloaded `.pem`. Needs
+  Pull requests and Issues at read and write, plus Metadata.
+- A **second GitHub App** for local work, because GitHub always redirects to
+  an app's first callback URL and ignores `redirect_uri`. One app cannot
+  serve both localhost and production.
+
+`BETTER_AUTH_URL` is the public origin. It has to match where the browser
+actually is, or the OAuth callback and the origin check both fail.
+
+## Things that will bite you
+
+Notes from building this, none of which are discoverable from the config.
+
+**An env-only change does not deploy.** Alchemy does not hash Config-derived
+values, so editing `.env.prod` alone plans a no-op and your change never
+ships. Use `bun alchemy deploy --stage prod --env-file .env.prod --force
+--yes`.
+
+**Keep dev and prod on separate stages.** They share state otherwise, and
+`alchemy dev` rewrites it to point at the local emulated resources. The next
+deploy then plans `replace (local -> live)` on D1, which drops every row.
+
+**Review line numbers must fall inside the diff.** GitHub rejects the entire
+review otherwise, not the offending comment, and returns 422. proxycroc
+passes its message through so the agent can retry.
+
+**Approving is off by default.** A bot approval counts toward required
+reviews under most branch protection rules, so a leaked approving key can
+move code into main.
+
+## Layout
+
 ```
-
-This project was created using `bun init` in bun v1.4.0. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+alchemy.run.ts        infrastructure: workers, D1, custom domain
+src/worker.ts         API worker: auth, agent routes, GitHub callback
+src/github.ts         GitHub App client: JWT, tokens, issues, reviews
+src/capabilities.ts   what a key may do, shared with the console
+src/docs.ts           the manual, served at /llm.txt and rendered at /docs
+src/auth-schema.ts    generated by bun run auth:generate
+web/                  TanStack Start app, Vite root
+```
