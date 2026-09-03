@@ -16,6 +16,8 @@ export const Route = createRootRoute({
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "icon", type: "image/png", href: "/favicon-light.png" },
       { rel: "apple-touch-icon", href: "/logo-light.png" },
+      // An agent parsing the page finds the plain-text manual from here.
+      { rel: "alternate", type: "text/plain", href: "/llm.txt" },
     ],
   }),
   notFoundComponent: () => (

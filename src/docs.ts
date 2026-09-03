@@ -14,6 +14,16 @@ The key carries its own limits. Scope it to one repository and it can reach
 nothing else. Uncheck a capability and the API refuses that whole class of
 call, so a key meant for triage cannot approve a merge.
 
+## Finding your way
+
+| Path | What it is |
+| --- | --- |
+| /llm.txt | This manual, as plain text. /llms.txt serves the same. |
+| /docs | The same manual, rendered. |
+| /console | Sign in, install the App, manage keys. |
+| /sitemap.xml | Every page listed. |
+| /robots.txt | Points here and at the sitemap. |
+
 ## Setup
 
 1. Install the GitHub App from the console and choose its repositories.

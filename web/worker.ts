@@ -3,6 +3,7 @@ import handler from "@tanstack/react-start/server-entry";
 import { env } from "cloudflare:workers";
 import type { WebsiteEnv } from "../alchemy.run";
 import { DOCS } from "../src/docs";
+import { robots, sitemap } from "../src/site";
 
 /**
  * Deployed Worker entry (wired up via `Cloudflare.Website.Vite`'s `main`).
@@ -16,14 +17,24 @@ export default {
   fetch(request: Request): Response | Promise<Response> {
     const url = new URL(request.url);
 
-    // The manual as plain text, for agents that fetch it directly.
-    if (url.pathname === "/llm.txt" || url.pathname === "/llms.txt") {
-      return new Response(DOCS, {
+    // Discovery, for anything arriving with only the domain. The manual as
+    // plain text, plus the two files a crawler looks for by name.
+    const text = (body: string, type = "text/plain") =>
+      new Response(body, {
         headers: {
-          "content-type": "text/plain; charset=utf-8",
+          "content-type": `${type}; charset=utf-8`,
           "cache-control": "public, max-age=300",
         },
       });
+
+    if (url.pathname === "/llm.txt" || url.pathname === "/llms.txt") {
+      return text(DOCS);
+    }
+    if (url.pathname === "/sitemap.xml") {
+      return text(sitemap(url.origin), "application/xml");
+    }
+    if (url.pathname === "/robots.txt") {
+      return text(robots(url.origin));
     }
 
     // Everything under /api belongs to the API worker; the web app owns no
