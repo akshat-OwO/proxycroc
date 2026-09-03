@@ -11,27 +11,34 @@ function Home() {
   const user = Route.useLoaderData();
 
   return (
-    <main>
-      <h1>proxycroc</h1>
-      <p className="tagline">
-        Let an agent review a branch locally and comment the diff on the PR.
-      </p>
+    <main className="landing">
+      <div>
+        <img src="/logo.png" alt="proxycroc" />
+        <h1>proxycroc</h1>
+        <p>
+          Your agent reviews a branch locally, then comments the diff on the
+          pull request as a bot.
+        </p>
 
-      {user ? (
-        <Link to="/console" className="button">
-          Go to /console
-        </Link>
-      ) : (
-        <button
-          type="button"
-          className="button"
-          onClick={() =>
-            authClient.signIn.social({ provider: "github", callbackURL: "/console" })
-          }
-        >
-          Sign in with GitHub
-        </button>
-      )}
+        {user ? (
+          <Link to="/console" className="button button--primary">
+            Go to console
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={() =>
+              authClient.signIn.social({
+                provider: "github",
+                callbackURL: "/console",
+              })
+            }
+          >
+            Sign in with GitHub
+          </button>
+        )}
+      </div>
     </main>
   );
 }

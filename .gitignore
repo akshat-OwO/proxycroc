@@ -38,3 +38,6 @@ web/.tanstack
 
 # alchemy state, local emulator data, and build bundles
 .alchemy
+
+# GitHub App private key
+*.pem

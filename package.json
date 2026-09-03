@@ -33,8 +33,8 @@
   },
   "scripts": {
     "dev": "bun alchemy dev",
-    "deploy": "bun alchemy deploy --env-file .env.prod",
-    "destroy": "bun alchemy destroy",
+    "deploy": "bun alchemy deploy --stage prod --env-file .env.prod",
+    "destroy": "bun alchemy destroy --stage prod --env-file .env.prod",
     "routes": "cd web && bunx tsr generate",
     "auth:generate": "bun scripts/generate-auth-schema.ts",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json && cd web && bunx tsc --noEmit -p tsconfig.json"

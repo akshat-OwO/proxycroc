@@ -9,8 +9,24 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "proxycroc" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/png", href: "/favicon.png" },
+      { rel: "apple-touch-icon", href: "/logo.png" },
+    ],
   }),
+  notFoundComponent: () => (
+    <main className="landing">
+      <div>
+        <img src="/logo.png" alt="" />
+        <h1>Not found</h1>
+        <p>That page does not exist.</p>
+        <a className="button button--primary" href="/">
+          Back home
+        </a>
+      </div>
+    </main>
+  ),
   shellComponent: RootDocument,
 });
 

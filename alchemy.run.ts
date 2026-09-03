@@ -3,6 +3,7 @@ import * as Drizzle from "alchemy/Drizzle";
 import * as Cloudflare from "alchemy/Cloudflare";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Config from "effect/Config";
 import { Database } from "./src/database";
 import AuthWorker from "./src/worker";
 
@@ -17,7 +18,11 @@ export const Website = Cloudflare.Website.Vite("proxycroc-web", {
   // Matches the production redirect URI registered on the GitHub OAuth app.
   // Requires the `4kshat.dev` zone to already exist in the Cloudflare account.
   domain: "proxycroc.4kshat.dev",
-  env: { AUTH: AuthWorker },
+  env: {
+    AUTH: AuthWorker,
+    // Public: only the app slug, used to build the install link.
+    GITHUB_APP_SLUG: Config.string("GITHUB_APP_SLUG"),
+  },
 });
 
 export type WebsiteEnv = Cloudflare.InferEnv<typeof Website>;

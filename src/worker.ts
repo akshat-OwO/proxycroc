@@ -5,6 +5,7 @@ import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 import { BetterAuth } from "@alchemy.run/better-auth";
 import { Drizzle } from "@alchemy.run/better-auth/Drizzle";
 import { drizzle } from "drizzle-orm/d1";
+import { eq } from "drizzle-orm";
 import * as Config from "effect/Config";
 import * as Redacted from "effect/Redacted";
 import { Database } from "./database";
@@ -44,8 +45,27 @@ export default Cloudflare.Worker(
     return {
       fetch: Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest;
-        if (new URL(request.url, "http://proxycroc").pathname.startsWith("/api/auth")) {
+        const url = new URL(request.url, "http://proxycroc");
+
+        if (url.pathname.startsWith("/api/auth")) {
           return yield* auth.fetch;
+        }
+
+        if (url.pathname === "/api/github/installed") {
+          return yield* installed(url, yield* auth.getSession());
+        }
+
+        if (url.pathname === "/api/github/installations") {
+          const session = yield* auth.getSession();
+          if (!session) return yield* HttpServerResponse.json([]);
+          const db = yield* Effect.map(d1.raw, (binding) => drizzle(binding));
+          const rows = yield* Effect.promise(() =>
+            db
+              .select()
+              .from(schema.githubInstallation)
+              .where(eq(schema.githubInstallation.userId, session.user.id)),
+          );
+          return yield* HttpServerResponse.json(rows);
         }
 
         // Everything else is the web app's job; this Worker is reached only
@@ -54,5 +74,46 @@ export default Cloudflare.Worker(
         return yield* HttpServerResponse.json({ user: session?.user ?? null });
       }).pipe(Effect.orDie),
     };
+
+    /**
+     * Where GitHub sends the user after they pick repositories. Records the
+     * installation against the signed-in user, then returns them to /console.
+     *
+     * `state` carries the user id we put on the install link, but it is
+     * attacker-controllable, so the session is what actually decides ownership.
+     */
+    function installed(
+      url: URL,
+      session: { user: { id: string } } | null,
+    ) {
+      return Effect.gen(function* () {
+        if (!session) return HttpServerResponse.redirect("/", { status: 302 });
+
+        const installationId = Number(url.searchParams.get("installation_id"));
+        if (!Number.isInteger(installationId) || installationId <= 0) {
+          return HttpServerResponse.redirect("/console?install=failed", {
+            status: 302,
+          });
+        }
+
+        const db = yield* Effect.map(d1.raw, (binding) =>
+          drizzle(binding),
+        );
+
+        yield* Effect.promise(() =>
+          db
+            .insert(schema.githubInstallation)
+            .values({ id: installationId, userId: session.user.id })
+            .onConflictDoUpdate({
+              target: schema.githubInstallation.id,
+              set: { userId: session.user.id },
+            }),
+        );
+
+        return HttpServerResponse.redirect("/console?install=ok", {
+          status: 302,
+        });
+      });
+    }
   }).pipe(Effect.provide(Cloudflare.D1.QueryDatabaseBinding)),
 );
