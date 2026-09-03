@@ -1,13 +1,14 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import appCss from "../styles.css?url";
+import { meta, SITE } from "../../../src/seo";
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "proxycroc" },
+      ...meta(),
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -18,6 +19,7 @@ export const Route = createRootRoute({
       { rel: "apple-touch-icon", href: "/logo-light.png" },
       // An agent parsing the page finds the plain-text manual from here.
       { rel: "alternate", type: "text/plain", href: "/llm.txt" },
+      { rel: "canonical", href: SITE.url },
     ],
   }),
   notFoundComponent: () => (

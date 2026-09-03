@@ -1,8 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Markdown } from "../components/Markdown";
 import { DOCS } from "../../../src/docs";
+import { meta } from "../../../src/seo";
 
-export const Route = createFileRoute("/docs")({ component: Docs });
+export const Route = createFileRoute("/docs")({
+  head: () => ({
+    meta: meta({
+      title: "Docs",
+      description:
+        "Every proxycroc route: read issues and pull requests, comment, open and close issues, and review code with line comments and suggestions.",
+      path: "/docs",
+    }),
+  }),
+  component: Docs,
+});
 
 function Docs() {
   return (
