@@ -7,8 +7,8 @@ import { DOCS } from "../src/docs";
 /**
  * Deployed Worker entry (wired up via `Cloudflare.Website.Vite`'s `main`).
  *
- * Everything under `/api/auth` and `/api/github` is forwarded over the `AUTH`
- * service binding to the API Worker, which owns the session and the database.
+ * Everything under `/api` is forwarded over the `AUTH` service binding to the
+ * API Worker, which owns the session, the database, and the agent routes.
  * The browser only ever talks to one origin, so the session cookie stays
  * first-party. Everything else is TanStack Start's SSR handler.
  */
@@ -26,11 +26,9 @@ export default {
       });
     }
 
-    if (
-      url.pathname === "/api/auth" ||
-      url.pathname.startsWith("/api/auth/") ||
-      url.pathname.startsWith("/api/github/")
-    ) {
+    // Everything under /api belongs to the API worker; the web app owns no
+    // routes there, so listing prefixes only invites forgetting one.
+    if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
       return (env as unknown as WebsiteEnv).AUTH.fetch(request);
     }
     return handler.fetch(request);
