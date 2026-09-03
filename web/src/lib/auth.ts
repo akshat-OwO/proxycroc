@@ -19,6 +19,11 @@ export interface ApiKeySummary {
   readonly enabled: boolean;
   readonly createdAt: string;
   readonly lastRequest: string | null;
+  /** `{ repository, capabilities }`; a null repository means every one. */
+  readonly metadata: {
+    repository?: string | null;
+    capabilities?: string[];
+  } | null;
 }
 
 /**
@@ -40,6 +45,21 @@ export const getSession = createServerFn({ method: "GET" }).handler(
     if (!response.ok) return null;
     const session = (await response.json()) as { user?: SessionUser } | null;
     return session?.user ?? null;
+  },
+);
+
+export interface Repository {
+  readonly id: number;
+  readonly fullName: string;
+  readonly private: boolean;
+}
+
+/** Repositories reachable through the user's installations. */
+export const listRepositories = createServerFn({ method: "GET" }).handler(
+  async (): Promise<Repository[]> => {
+    const response = await callAuth("github/repositories");
+    if (!response.ok) return [];
+    return (await response.json()) as Repository[];
   },
 );
 

@@ -131,6 +131,9 @@ dialog {
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink);
+  /* The repository list is positioned and hangs past the bottom edge; without
+     this the dialog box clips it. */
+  overflow: visible;
 }
 dialog::backdrop { background: rgb(16 32 26 / 0.35); }
 .dialog__body { padding: 1.1rem; display: grid; gap: 0.75rem; }
@@ -171,3 +174,124 @@ dialog::backdrop { background: rgb(16 32 26 / 0.35); }
 .landing img { width: 96px; height: 96px; }
 .landing h1 { margin: 1rem 0 0.35rem; font-size: 1.9rem; letter-spacing: -0.02em; }
 .landing p { margin: 0 0 1.75rem; color: var(--muted); max-width: 26rem; }
+
+/* --- repository picker -------------------------------------------------- */
+
+.picker { position: relative; }
+
+.picker__list {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  right: 0;
+  /* Never taller than the room under the field, so the list cannot run off
+     the bottom of the viewport. */
+  max-height: min(13rem, 40vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(16 32 26 / 0.12);
+}
+
+.picker__list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0.35rem 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.picker__list button.is-active { background: var(--accent); color: #fff; }
+.picker__empty { padding: 0.4rem 0.5rem; color: var(--muted); font-size: 0.9rem; }
+
+/* --- docs --------------------------------------------------------------- */
+
+.card__actions { display: flex; align-items: center; gap: 0.5rem; }
+
+.docs { max-width: 44rem; }
+.docs__bar {
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin-bottom: 2.5rem;
+}
+.docs__bar a { color: inherit; text-decoration: none; }
+.docs__bar a:last-child { font-size: 0.9rem; color: var(--muted); }
+.docs__bar a:last-child:hover { color: var(--ink); }
+
+.docs h1 { font-size: 1.6rem; letter-spacing: -0.02em; margin: 0 0 0.6rem; }
+.docs h2 {
+  font-size: 1.05rem;
+  margin: 2.5rem 0 0.6rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--hairline);
+}
+.docs p { margin: 0 0 1rem; }
+.docs ol { margin: 0 0 1rem; padding-left: 1.2rem; }
+.docs li { margin-bottom: 0.4rem; }
+.docs em { color: var(--ink); font-style: normal; font-weight: 600; }
+
+.docs pre {
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+.docs code.mono { color: var(--accent); }
+
+.docs table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+  font-size: 0.92rem;
+}
+.docs th {
+  text-align: left;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 0.4rem;
+}
+.docs td { padding: 0.5rem 1rem 0.5rem 0; border-top: 1px solid var(--hairline); vertical-align: top; }
+.docs td:last-child { padding-right: 0; }
+
+.caps {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border: 2px solid var(--hairline);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.35rem;
+}
+.caps legend {
+  padding: 0 0.35rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.caps label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+.caps input { accent-color: var(--accent); }

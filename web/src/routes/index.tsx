@@ -13,11 +13,12 @@ function Home() {
   return (
     <main className="landing">
       <div>
-        <img src="/logo.png" alt="proxycroc" />
+        <img src="/logo-light.png" alt="proxycroc" />
         <h1>proxycroc</h1>
         <p>
-          Your agent reviews a branch locally, then comments the diff on the
-          pull request as a bot.
+          A proxy bot for agents. Give one an API key and it can read your
+          issues and pull requests, comment, and review, without ever holding
+          your GitHub credentials.
         </p>
 
         {user ? (

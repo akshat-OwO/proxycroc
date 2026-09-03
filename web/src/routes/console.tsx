@@ -1,12 +1,25 @@
-import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useRouter,
+} from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   getInstallUrl,
   getSession,
   listApiKeys,
   listInstallations,
+  listRepositories,
 } from "../lib/auth";
 import { authClient } from "../lib/auth-client";
+import { RepositoryPicker } from "../components/RepositoryPicker";
+import {
+  CAPABILITIES,
+  DEFAULT_CAPABILITIES,
+  LABELS,
+  type Capability,
+} from "../../../src/capabilities";
 
 export const Route = createFileRoute("/console")({
   beforeLoad: async () => {
@@ -19,16 +32,23 @@ export const Route = createFileRoute("/console")({
     keys: await listApiKeys(),
     installUrl: await getInstallUrl(),
     installations: await listInstallations(),
+    repositories: await listRepositories(),
   }),
   component: Console,
 });
 
 function Console() {
-  const { user, keys, installUrl, installations } = Route.useLoaderData();
+  const { user, keys, installUrl, installations, repositories } =
+    Route.useLoaderData();
+  const connected = installations.length > 0;
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
 
   const [name, setName] = useState("");
+  // "" means every repository the installation can see.
+  const [repository, setRepository] = useState("");
+  const [capabilities, setCapabilities] =
+    useState<Capability[]>(DEFAULT_CAPABILITIES);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The plaintext key exists only in the create response; it is stored hashed.
@@ -37,6 +57,8 @@ function Console() {
 
   function open() {
     setName("");
+    setRepository("");
+    setCapabilities(DEFAULT_CAPABILITIES);
     setError(null);
     setCreated(null);
     setCopied(false);
@@ -55,6 +77,7 @@ function Console() {
     const result = await authClient.apiKey.create({
       name: name.trim() || "agent",
       prefix: "pxc_",
+      metadata: { repository: repository || null, capabilities },
     });
     setBusy(false);
 
@@ -82,12 +105,17 @@ function Console() {
       <section className="card">
         <div className="card__bar">
           <div className="brand">
-            <img src="/logo.png" alt="" />
+            <img src="/logo-light.png" alt="" />
             <span>proxycroc</span>
           </div>
-          <button type="button" onClick={open}>
-            New key
-          </button>
+          <div className="card__actions">
+            <Link to="/docs" className="button--ghost button">
+              Docs
+            </Link>
+            <button type="button" onClick={open} disabled={!connected}>
+              New key
+            </button>
+          </div>
         </div>
 
         <div className="card__body">
@@ -95,7 +123,9 @@ function Console() {
 
           {keys.length === 0 ? (
             <p className="empty">
-              No keys yet. Create one to let an agent authenticate.
+              {connected
+                ? "No keys yet. Create one to let an agent authenticate."
+                : "Connect your repositories below, then create a key."}
             </p>
           ) : (
             <ul className="keys">
@@ -106,6 +136,12 @@ function Console() {
                     <span className="mono">
                       {key.prefix ?? ""}
                       {key.start ?? "•••"}…
+                      {" · "}
+                      {key.metadata?.repository ?? "all repositories"}
+                      {" · "}
+                      {(key.metadata?.capabilities ?? DEFAULT_CAPABILITIES).join(
+                        ", ",
+                      )}
                       {" · "}
                       {key.lastRequest
                         ? `last used ${new Date(key.lastRequest).toLocaleDateString()}`
@@ -170,6 +206,11 @@ function Console() {
         ref={dialog}
         name={name}
         onName={setName}
+        repository={repository}
+        onRepository={setRepository}
+        repositories={repositories}
+        capabilities={capabilities}
+        onCapabilities={setCapabilities}
         busy={busy}
         error={error}
         created={created}
@@ -186,6 +227,11 @@ function KeyDialog({
   ref,
   name,
   onName,
+  repository,
+  onRepository,
+  repositories,
+  capabilities,
+  onCapabilities,
   busy,
   error,
   created,
@@ -197,6 +243,11 @@ function KeyDialog({
   ref: React.Ref<HTMLDialogElement>;
   name: string;
   onName: (value: string) => void;
+  repository: string;
+  onRepository: (value: string) => void;
+  repositories: { id: number; fullName: string }[];
+  capabilities: Capability[];
+  onCapabilities: (value: Capability[]) => void;
   busy: boolean;
   error: string | null;
   created: string | null;
@@ -243,6 +294,31 @@ function KeyDialog({
               aria-label="Key name"
               autoFocus
             />
+            <RepositoryPicker
+              value={repository}
+              onChange={onRepository}
+              repositories={repositories}
+            />
+
+            <fieldset className="caps">
+              <legend>This key may</legend>
+              {CAPABILITIES.map((capability) => (
+                <label key={capability}>
+                  <input
+                    type="checkbox"
+                    checked={capabilities.includes(capability)}
+                    onChange={(e) =>
+                      onCapabilities(
+                        e.target.checked
+                          ? [...capabilities, capability]
+                          : capabilities.filter((c) => c !== capability),
+                      )
+                    }
+                  />
+                  {LABELS[capability]}
+                </label>
+              ))}
+            </fieldset>
             {error && <p className="error">{error}</p>}
             <div className="dialog__actions">
               <button type="button" className="button--ghost" onClick={onClose}>

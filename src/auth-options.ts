@@ -27,5 +27,7 @@ export const authOptions = ({ baseURL, github }: AuthConfig) => ({
   baseURL,
   basePath: "/api/auth",
   socialProviders: { github },
-  plugins: [apiKey()],
+  // Keys carry their scope in metadata: { repository: "owner/name" | null },
+  // where null means every repository the installation can see.
+  plugins: [apiKey({ enableMetadata: true })],
 });

@@ -11,14 +11,17 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", type: "image/png", href: "/favicon.png" },
-      { rel: "apple-touch-icon", href: "/logo.png" },
+      // The SVG carries both crocs and switches on prefers-color-scheme
+      // internally; `media` on a <link rel="icon"> is ignored by Chrome.
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "icon", type: "image/png", href: "/favicon-light.png" },
+      { rel: "apple-touch-icon", href: "/logo-light.png" },
     ],
   }),
   notFoundComponent: () => (
     <main className="landing">
       <div>
-        <img src="/logo.png" alt="" />
+        <img src="/logo-light.png" alt="" />
         <h1>Not found</h1>
         <p>That page does not exist.</p>
         <a className="button button--primary" href="/">
