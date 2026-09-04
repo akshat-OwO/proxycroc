@@ -5,6 +5,10 @@
  * Reading is harmless, commenting is advisory, and approving moves code
  * toward merge (a bot approval counts toward required reviews in most branch
  * protection setups), so `approve` is opt-in rather than granted by default.
+ *
+ * `checks` is opt-in for the same reason: a passing check run satisfies a
+ * required status check of that name, so a key that can publish checks can
+ * clear a merge gate as well as raise one.
  */
 export const CAPABILITIES = [
   "read",
@@ -12,6 +16,7 @@ export const CAPABILITIES = [
   "issues",
   "review",
   "approve",
+  "checks",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -29,6 +34,7 @@ export const LABELS: Record<Capability, string> = {
   issues: "Open, edit, and close issues",
   review: "Review pull requests and request changes",
   approve: "Approve pull requests",
+  checks: "Publish check runs on commits",
 };
 
 export interface KeyScope {

@@ -43,6 +43,7 @@ in the JSON body for POST. Authenticate with \`Authorization: Bearer <key>\`.
 | POST | /api/comment | Comment on an issue or a pull request. |
 | POST | /api/issue | Open an issue, or edit one by sending its number. |
 | POST | /api/review | Review a pull request, with line comments and a verdict. |
+| POST | /api/check | Publish a check run on a commit, with annotations. |
 
 ## Reading
 
@@ -125,6 +126,53 @@ otherwise, and returns 502 carrying the line it refused. Requesting changes
 blocks the merge until someone dismisses it, so an agent that fires it on a
 false positive makes work for a person.
 
+## Check runs
+
+A check run is the pass/fail row GitHub shows on a commit and at the bottom of
+a pull request. Use it when the agent is a gate rather than a reviewer: the
+verdict is machine-readable, it can be marked required in branch protection,
+and it does not add to the conversation.
+
+\`\`\`
+curl https://proxycroc.4kshat.dev/api/check \\
+  -H "Authorization: Bearer $PROXYCROC_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "repository": "owner/name",
+    "pull_request": 42,
+    "name": "agent review",
+    "status": "completed",
+    "conclusion": "failure",
+    "title": "1 blocking finding",
+    "summary": "The token refresh can run twice.",
+    "annotations": [
+      {
+        "path": "src/worker.ts",
+        "line": 128,
+        "level": "failure",
+        "message": "This parses the header twice."
+      }
+    ]
+  }'
+\`\`\`
+
+Name the commit with \`head_sha\` (full 40 characters), or send
+\`pull_request\` and proxycroc resolves its head. \`status\` is queued,
+in_progress, or completed; a completed run needs a \`conclusion\` of success,
+failure, neutral, cancelled, timed_out, action_required, or skipped.
+
+Posting the same \`name\` on the same commit updates the existing run instead
+of stacking a second one, so an agent can report in_progress first and the
+result after. \`id\` from a previous response targets that exact run.
+
+Annotations attach a finding to lines in the diff and show up in the Files
+tab. \`line\` covers one line; \`start_line\` and \`end_line\` span a range.
+Unlike review comments they are not restricted to the diff, and more than 50
+are sent in batches rather than dropped.
+
+The GitHub App needs Checks at read and write. Without it GitHub returns 403
+through as a 502.
+
 ## Capabilities
 
 | Capability | Allows |
@@ -134,10 +182,12 @@ false positive makes work for a person.
 | issues | POST /api/issue, opening and editing |
 | review | POST /api/review with COMMENT or REQUEST_CHANGES |
 | approve | POST /api/review with APPROVE. Off by default. |
+| checks | POST /api/check. Off by default. |
 
-Approving is the one that is off unless you tick it. A bot approval counts
-toward required reviews under most branch protection rules, so a leaked
-approving key can move code into main. Commenting keys are noise by
+Approving and checks are the two that are off unless you tick them. A bot
+approval counts toward required reviews under most branch protection rules,
+and a passing check run satisfies a required check of that name, so either
+key can move code into main if it leaks. Commenting keys are noise by
 comparison.
 
 ## Errors

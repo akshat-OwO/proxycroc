@@ -366,3 +366,168 @@ export async function createReview(
   );
   return created.html_url;
 }
+
+// --- check runs -----------------------------------------------------------
+
+export const CHECK_STATUSES = ["queued", "in_progress", "completed"] as const;
+
+export const CHECK_CONCLUSIONS = [
+  "success",
+  "failure",
+  "neutral",
+  "cancelled",
+  "timed_out",
+  "action_required",
+  "skipped",
+] as const;
+
+export type CheckStatus = (typeof CHECK_STATUSES)[number];
+export type CheckConclusion = (typeof CHECK_CONCLUSIONS)[number];
+
+/** A file-and-line finding, shown inline on the pull request's Files tab. */
+export interface CheckAnnotation {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly level: "notice" | "warning" | "failure";
+  readonly message: string;
+  readonly title?: string;
+}
+
+export interface CheckRun {
+  readonly id: number;
+  readonly name: string;
+  readonly headSha: string;
+  readonly status: string;
+  readonly conclusion: string | null;
+  readonly url: string;
+}
+
+export interface CheckRunFields {
+  readonly name: string;
+  readonly headSha: string;
+  readonly status: CheckStatus;
+  readonly conclusion?: CheckConclusion;
+  readonly detailsUrl?: string;
+  readonly title?: string;
+  readonly summary?: string;
+  readonly text?: string;
+  readonly annotations?: CheckAnnotation[];
+}
+
+const checkRun = (raw: {
+  id: number;
+  name: string;
+  head_sha: string;
+  status: string;
+  conclusion: string | null;
+  html_url: string | null;
+}): CheckRun => ({
+  id: raw.id,
+  name: raw.name,
+  headSha: raw.head_sha,
+  status: raw.status,
+  conclusion: raw.conclusion,
+  url: raw.html_url ?? "",
+});
+
+/** The head SHA of a pull request, so callers can name a PR instead of a commit. */
+export async function pullRequestHead(
+  credentials: AppCredentials,
+  installationId: number,
+  repository: string,
+  pullRequest: number,
+): Promise<string> {
+  const token = await installationToken(credentials, installationId);
+  const pull = await call<{ head: { sha: string } }>(
+    token,
+    "GET",
+    `/repos/${repository}/pulls/${pullRequest}`,
+  );
+  return pull.head.sha;
+}
+
+/**
+ * Creates a check run, or updates the one this app already published under
+ * the same name on the same commit.
+ *
+ * GitHub happily stacks duplicates: posting the same name twice leaves two
+ * rows on the commit, one of them stale. An agent that reports progress then
+ * a result is the normal case here, so the existing run is looked up first
+ * and patched. Pass `id` to skip the lookup.
+ *
+ * GitHub caps annotations at 50 per request; more than that are sent in
+ * follow-up updates rather than silently dropped.
+ */
+export async function publishCheckRun(
+  credentials: AppCredentials,
+  installationId: number,
+  repository: string,
+  fields: CheckRunFields & { id?: number },
+): Promise<CheckRun> {
+  const token = await installationToken(credentials, installationId);
+
+  const annotations = (fields.annotations ?? []).map((a) => ({
+    path: a.path,
+    start_line: a.startLine,
+    end_line: a.endLine,
+    annotation_level: a.level,
+    message: a.message,
+    ...(a.title === undefined ? {} : { title: a.title }),
+  }));
+
+  const output = (batch: typeof annotations) =>
+    fields.title || fields.summary || batch.length
+      ? {
+          output: {
+            title: fields.title ?? fields.name,
+            summary: fields.summary ?? "",
+            ...(fields.text === undefined ? {} : { text: fields.text }),
+            ...(batch.length ? { annotations: batch } : {}),
+          },
+        }
+      : {};
+
+  const payload = {
+    status: fields.status,
+    ...(fields.status === "completed"
+      ? { conclusion: fields.conclusion ?? "neutral" }
+      : {}),
+    ...(fields.detailsUrl ? { details_url: fields.detailsUrl } : {}),
+    ...output(annotations.slice(0, 50)),
+  };
+
+  const existing =
+    fields.id ??
+    (
+      await call<{ check_runs: { id: number; app: { id: number } | null }[] }>(
+        token,
+        "GET",
+        `/repos/${repository}/commits/${fields.headSha}/check-runs?check_name=${encodeURIComponent(fields.name)}&per_page=100`,
+      )
+    ).check_runs.find((r) => String(r.app?.id) === String(credentials.appId))?.id;
+
+  let run = checkRun(
+    existing
+      ? await call(token, "PATCH", `/repos/${repository}/check-runs/${existing}`, {
+          name: fields.name,
+          head_sha: fields.headSha,
+          ...payload,
+        })
+      : await call(token, "POST", `/repos/${repository}/check-runs`, {
+          name: fields.name,
+          head_sha: fields.headSha,
+          ...payload,
+        }),
+  );
+
+  for (let from = 50; from < annotations.length; from += 50) {
+    run = checkRun(
+      await call(token, "PATCH", `/repos/${repository}/check-runs/${run.id}`, {
+        ...output(annotations.slice(from, from + 50)),
+      }),
+    );
+  }
+
+  return run;
+}

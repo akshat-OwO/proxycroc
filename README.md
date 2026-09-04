@@ -47,6 +47,7 @@ curl https://proxycroc.4kshat.dev/api/review \
 | POST | /api/comment | Comment on an issue or a pull request. |
 | POST | /api/issue | Open an issue, or edit one by sending its number. |
 | POST | /api/review | Review a pull request, with line comments and a verdict. |
+| POST | /api/check | Publish a check run on a commit, with annotations. |
 
 `src/docs.ts` is the full manual and the only copy of it. `/llm.txt` serves it
 as plain text and `/docs` renders it, so the two cannot drift.
@@ -84,7 +85,7 @@ You need two GitHub apps and one OAuth app:
   `GITHUB_CLIENT_SECRET`, callback `/api/auth/callback/github`.
 - A **GitHub App** comments as the bot. `GITHUB_APP_ID`, `GITHUB_APP_SLUG`,
   and `GITHUB_APP_PRIVATE_KEY` as the base64 of the downloaded `.pem`. Needs
-  Pull requests and Issues at read and write, plus Metadata.
+  Pull requests, Issues, and Checks at read and write, plus Metadata.
 - A **second GitHub App** for local work, because GitHub always redirects to
   an app's first callback URL and ignores `redirect_uri`. One app cannot
   serve both localhost and production.
@@ -111,7 +112,13 @@ passes its message through so the agent can retry.
 
 **Approving is off by default.** A bot approval counts toward required
 reviews under most branch protection rules, so a leaked approving key can
-move code into main.
+move code into main. Publishing check runs is off for the same reason: a
+passing run satisfies a required check of that name.
+
+**A check run posted twice under one name stacks.** GitHub does not dedupe,
+so `publishCheckRun` looks up this app's existing run on the commit and
+patches it. That is what lets an agent report `in_progress` and then the
+result.
 
 ## Layout
 

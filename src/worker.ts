@@ -18,7 +18,14 @@ import {
   listIssues,
   listPullRequests,
   listRepositories,
+  publishCheckRun,
+  pullRequestHead,
   updateIssue,
+  CHECK_CONCLUSIONS,
+  CHECK_STATUSES,
+  type CheckAnnotation,
+  type CheckConclusion,
+  type CheckStatus,
   type ReviewComment,
 } from "./github";
 import { readScope, type Capability } from "./capabilities";
@@ -117,7 +124,7 @@ export default Cloudflare.Worker(
         }
 
         const agentRoute = url.pathname.match(
-          /^\/api\/(issues|pulls|comment|issue|review)$/,
+          /^\/api\/(issues|pulls|comment|issue|review|check)$/,
         );
         if (agentRoute) {
           return yield* agentApi(request, agentRoute[1]!);
@@ -422,6 +429,121 @@ export default Cloudflare.Worker(
                 comments: comments as ReviewComment[],
               }),
             })),
+            201,
+          );
+        }
+
+        if (route === "check") {
+          if (!needs("checks")) {
+            return yield* fail(403, "This key cannot publish check runs.");
+          }
+
+          const name = String(body.name ?? "").trim();
+          if (!name) {
+            return yield* fail(400, "`name` is required: it labels the check.");
+          }
+
+          const headSha = String(body.head_sha ?? "").trim();
+          const pullRequest = Number(body.pull_request ?? 0);
+          if (!headSha && (!Number.isInteger(pullRequest) || pullRequest <= 0)) {
+            return yield* fail(
+              400,
+              "Send `head_sha`, or `pull_request` to check its head commit.",
+            );
+          }
+          if (headSha && !/^[0-9a-f]{40}$/i.test(headSha)) {
+            return yield* fail(400, "`head_sha` must be a full 40-character SHA.");
+          }
+
+          const status = String(body.status ?? "completed") as CheckStatus;
+          if (!(CHECK_STATUSES as readonly string[]).includes(status)) {
+            return yield* fail(
+              400,
+              `\`status\` must be one of ${CHECK_STATUSES.join(", ")}.`,
+            );
+          }
+
+          const conclusion =
+            body.conclusion === undefined
+              ? undefined
+              : (String(body.conclusion) as CheckConclusion);
+          if (
+            conclusion !== undefined &&
+            !(CHECK_CONCLUSIONS as readonly string[]).includes(conclusion)
+          ) {
+            return yield* fail(
+              400,
+              `\`conclusion\` must be one of ${CHECK_CONCLUSIONS.join(", ")}.`,
+            );
+          }
+          // GitHub marks a completed run with no conclusion as failed, which
+          // is not what an agent that forgot the field meant to say.
+          if (status === "completed" && conclusion === undefined) {
+            return yield* fail(
+              400,
+              "A completed check needs a `conclusion`, e.g. success or failure.",
+            );
+          }
+
+          const annotations: CheckAnnotation[] = Array.isArray(body.annotations)
+            ? (body.annotations as Record<string, unknown>[]).map((a) => {
+                const startLine = Number(a.start_line ?? a.line);
+                return {
+                  path: String(a.path ?? ""),
+                  startLine,
+                  endLine: Number(a.end_line ?? a.line ?? startLine),
+                  level: String(a.level ?? "warning") as CheckAnnotation["level"],
+                  message: String(a.message ?? ""),
+                  title: a.title === undefined ? undefined : String(a.title),
+                };
+              })
+            : [];
+
+          const badAnnotation = annotations.find(
+            (a) =>
+              !a.path ||
+              !a.message ||
+              !Number.isInteger(a.startLine) ||
+              a.startLine <= 0 ||
+              !Number.isInteger(a.endLine) ||
+              a.endLine < a.startLine ||
+              !["notice", "warning", "failure"].includes(a.level),
+          );
+          if (badAnnotation) {
+            return yield* fail(
+              400,
+              "Every annotation needs a `path`, a `message`, a positive `line` " +
+                "(or `start_line`/`end_line`), and a `level` of notice, warning, " +
+                "or failure.",
+            );
+          }
+
+          return yield* respond(
+            yield* attempt(async (id) =>
+              publishCheckRun(credentials, id, repository, {
+                id: body.id === undefined ? undefined : Number(body.id),
+                name,
+                headSha:
+                  headSha ||
+                  (await pullRequestHead(
+                    credentials,
+                    id,
+                    repository,
+                    pullRequest,
+                  )),
+                status,
+                conclusion,
+                detailsUrl:
+                  body.details_url === undefined
+                    ? undefined
+                    : String(body.details_url),
+                title: body.title === undefined ? undefined : String(body.title),
+                summary:
+                  body.summary === undefined ? undefined : String(body.summary),
+                text: body.text === undefined ? undefined : String(body.text),
+                annotations,
+              }),
+            ),
             201,
           );
         }
