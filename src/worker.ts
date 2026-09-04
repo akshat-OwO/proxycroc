@@ -24,6 +24,53 @@ import {
 import { readScope, type Capability } from "./capabilities";
 import * as schema from "./schema";
 
+/**
+ * Turn a `verifyApiKey` rejection into a response an agent can act on.
+ *
+ * Every rejection used to come back as a flat 401 "Invalid or expired API
+ * key", which sent agents off to mint a new key when the real answer was
+ * "wait a few seconds" — a retryable condition dressed up as a fatal one.
+ */
+function describeKeyDenial(
+  error: { code?: string | null; details?: unknown } | null | undefined,
+): {
+  status: number;
+  error: string;
+  headers?: Record<string, string>;
+} {
+  const tryAgainIn = (details: unknown): number | null => {
+    const value =
+      details && typeof details === "object"
+        ? (details as { tryAgainIn?: unknown }).tryAgainIn
+        : undefined;
+    return typeof value === "number" && value > 0 ? Math.ceil(value / 1000) : null;
+  };
+
+  switch (error?.code) {
+    case "RATE_LIMITED": {
+      const seconds = tryAgainIn(error.details);
+      return {
+        status: 429,
+        error: seconds
+          ? `Rate limit exceeded for this API key. Try again in ${seconds}s.`
+          : "Rate limit exceeded for this API key.",
+        headers: seconds ? { "retry-after": String(seconds) } : undefined,
+      };
+    }
+    case "USAGE_EXCEEDED":
+      return {
+        status: 429,
+        error: "This API key has reached its usage limit.",
+      };
+    case "KEY_EXPIRED":
+      return { status: 401, error: "This API key has expired. Create a new one." };
+    case "KEY_DISABLED":
+      return { status: 401, error: "This API key is disabled." };
+    default:
+      return { status: 401, error: "Invalid API key." };
+  }
+}
+
 export default Cloudflare.Worker(
   "proxycroc-worker",
   { main: import.meta.url, compatibility: { flags: ["nodejs_compat"] } },
@@ -177,7 +224,11 @@ export default Cloudflare.Worker(
           .verifyApiKey({ body: { key } })
           .pipe(Effect.catch(() => Effect.succeed(null)));
         if (!verified?.valid || !verified.key) {
-          return yield* fail(401, "Invalid or expired API key.");
+          const denial = describeKeyDenial(verified?.error);
+          return yield* HttpServerResponse.json(
+            { error: denial.error },
+            { status: denial.status, headers: denial.headers },
+          ).pipe(Effect.orDie);
         }
 
         const scope = readScope(verified.key.metadata);

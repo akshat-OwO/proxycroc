@@ -29,5 +29,15 @@ export const authOptions = ({ baseURL, github }: AuthConfig) => ({
   socialProviders: { github },
   // Keys carry their scope in metadata: { repository: "owner/name" | null },
   // where null means every repository the installation can see.
-  plugins: [apiKey({ enableMetadata: true })],
+  plugins: [
+    apiKey({
+      enableMetadata: true,
+      // An agent working one task bursts: list issues, read comments, reply.
+      // 60/minute leaves room for that while still capping a runaway loop
+      // far below GitHub's 5,000/hour per-installation limit. These values
+      // are copied onto each key row at creation time, so changing them
+      // only affects keys created afterwards.
+      rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 60 },
+    }),
+  ],
 });
