@@ -21,7 +21,7 @@ export const Website = Cloudflare.Website.Vite("proxycroc-web", {
   env: {
     AUTH: AuthWorker,
     // Public: only the app slug, used to build the install link.
-    GITHUB_APP_SLUG: Config.string("GITHUB_APP_SLUG"),
+    GITHUB_APP_SLUG: Config.String("GITHUB_APP_SLUG"),
   },
 });
 

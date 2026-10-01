@@ -94,11 +94,11 @@ export default Cloudflare.Worker(
 
     // Yielding a Config in the Worker's Init phase registers it as a
     // `secret_text` binding at deploy; values come from .env locally.
-    const baseURL = yield* Config.string("BETTER_AUTH_URL");
-    const clientId = yield* Config.string("GITHUB_CLIENT_ID");
-    const clientSecret = yield* Config.redacted("GITHUB_CLIENT_SECRET");
-    const appId = yield* Config.string("GITHUB_APP_ID");
-    const appPrivateKey = yield* Config.redacted("GITHUB_APP_PRIVATE_KEY");
+    const baseURL = yield* Config.String("BETTER_AUTH_URL");
+    const clientId = yield* Config.String("GITHUB_CLIENT_ID");
+    const clientSecret = yield* Config.Redacted("GITHUB_CLIENT_SECRET");
+    const appId = yield* Config.String("GITHUB_APP_ID");
+    const appPrivateKey = yield* Config.Redacted("GITHUB_APP_PRIVATE_KEY");
 
     const auth = yield* BetterAuth({
       ...authOptions({
