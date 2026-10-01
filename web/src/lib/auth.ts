@@ -39,14 +39,14 @@ const callAuth = (path: string) =>
     headers: getRequestHeaders() as unknown as HeadersInit,
   });
 
-export const getSession = createServerFn({ method: "GET" }).handler(
-  async (): Promise<SessionUser | null> => {
-    const response = await callAuth("auth/get-session");
-    if (!response.ok) return null;
-    const session = (await response.json()) as { user?: SessionUser } | null;
-    return session?.user ?? null;
-  },
-);
+async function readSession(): Promise<SessionUser | null> {
+  const response = await callAuth("auth/get-session");
+  if (!response.ok) return null;
+  const session = (await response.json()) as { user?: SessionUser } | null;
+  return session?.user ?? null;
+}
+
+export const getSession = createServerFn({ method: "GET" }).handler(readSession);
 
 export interface Repository {
   readonly id: number;
@@ -69,27 +69,46 @@ export interface Installation {
   readonly createdAt: number;
 }
 
-export const listInstallations = createServerFn({ method: "GET" }).handler(
-  async (): Promise<Installation[]> => {
-    const response = await callAuth("github/installations");
-    if (!response.ok) return [];
-    return (await response.json()) as Installation[];
-  },
-);
+async function readInstallations(): Promise<Installation[]> {
+  const response = await callAuth("github/installations");
+  if (!response.ok) return [];
+  return (await response.json()) as Installation[];
+}
 
-export const getInstallUrl = createServerFn({ method: "GET" }).handler(
-  async (): Promise<string | null> => {
-    const slug = (env as unknown as WebsiteEnv).GITHUB_APP_SLUG;
-    return slug ? `https://github.com/apps/${slug}/installations/new` : null;
-  },
-);
+async function readApiKeys(): Promise<ApiKeySummary[]> {
+  const response = await callAuth("auth/api-key/list");
+  if (!response.ok) return [];
+  // The endpoint answers with a paginated envelope, not a bare array.
+  const body = (await response.json()) as { apiKeys?: ApiKeySummary[] };
+  return body.apiKeys ?? [];
+}
 
-export const listApiKeys = createServerFn({ method: "GET" }).handler(
-  async (): Promise<ApiKeySummary[]> => {
-    const response = await callAuth("auth/api-key/list");
-    if (!response.ok) return [];
-    // The endpoint answers with a paginated envelope, not a bare array.
-    const body = (await response.json()) as { apiKeys?: ApiKeySummary[] };
-    return body.apiKeys ?? [];
+function installUrl(): string | null {
+  const slug = (env as unknown as WebsiteEnv).GITHUB_APP_SLUG;
+  return slug ? `https://github.com/apps/${slug}/installations/new` : null;
+}
+
+export interface ConsoleData {
+  readonly user: SessionUser;
+  readonly keys: ApiKeySummary[];
+  readonly installations: Installation[];
+  readonly installUrl: string | null;
+}
+
+/**
+ * Everything the console needs to paint, in one round trip. The three auth
+ * calls run side by side; without a session the other two answer empty, so
+ * nothing waits on the session check. Repositories are left out on purpose:
+ * listing them goes through GitHub and is only needed once a key is created.
+ */
+export const getConsole = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ConsoleData | null> => {
+    const [user, keys, installations] = await Promise.all([
+      readSession(),
+      readApiKeys(),
+      readInstallations(),
+    ]);
+    if (!user) return null;
+    return { user, keys, installations, installUrl: installUrl() };
   },
 );
